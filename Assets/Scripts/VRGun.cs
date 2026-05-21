@@ -83,6 +83,18 @@ namespace VRAimLab
                 audioSource = gameObject.AddComponent<AudioSource>();
             }
             audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 1f; // 3D音效
+
+            // 自动加载 Resources/Audio/ 目录下的音频文件
+            if (shootSound == null)
+            {
+                AudioClip[] clips = Resources.LoadAll<AudioClip>("Audio");
+                if (clips != null && clips.Length > 0)
+                {
+                    shootSound = clips[0];
+                    Debug.Log($"[VRGun] 自动加载音效: {shootSound.name}");
+                }
+            }
         }
 
         void SetupLaserLine()
