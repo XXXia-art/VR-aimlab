@@ -339,6 +339,8 @@ namespace VRAimLab
                 gunSelector = rightHand.AddComponent<GunSelector>();
                 gunSelector.gunParent = rightHand.transform;
             }
+            // 菜单状态下也显示默认枪械
+            gunSelector.RefreshGun();
 
             // VRGun 脚本
             VRGun gun = rightHand.GetComponent<VRGun>();
@@ -446,9 +448,11 @@ namespace VRAimLab
             menuRT.sizeDelta = new Vector2(700f, 500f);
             menuCanvasObj.transform.localScale = Vector3.one * 0.003f;
 
-            // 放在左墙上
-            menuCanvasObj.transform.position = new Vector3(-roomWidth * 0.5f + 0.3f, 1.8f, gridDistance * 0.5f);
-            menuCanvasObj.transform.rotation = Quaternion.Euler(0, 30f, 0);
+            // 放在左墙上，面向房间中心
+            Vector3 menuPos = new Vector3(-roomWidth * 0.5f + 0.25f, 1.8f, gridDistance * 0.5f);
+            menuCanvasObj.transform.position = menuPos;
+            menuCanvasObj.transform.LookAt(new Vector3(0, 1.6f, gridDistance * 0.3f));
+            menuCanvasObj.transform.Rotate(0, 180, 0); // Canvas 背面是正面，需要翻转
 
             // 背景
             GameObject menuPanel = GameObject.Find("MenuPanel");
