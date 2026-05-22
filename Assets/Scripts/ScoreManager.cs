@@ -57,17 +57,17 @@ namespace VRAimLab
             float elapsed = Time.time - startTime;
             int minutes = Mathf.FloorToInt(elapsed / 60f);
             int seconds = Mathf.FloorToInt(elapsed % 60f);
-            timeText.text = $"Time: {minutes:00}:{seconds:00}";
+            timeText.text = $"<color=#555555>TIME</color>\n{minutes:00}:{seconds:00}";
         }
 
         void UpdateUI()
         {
             float accuracy = shots > 0 ? (hits / (float)shots) * 100f : 0f;
 
-            if (scoreText != null) scoreText.text = $"Score: {score}";
-            if (hitsText != null) hitsText.text = $"Hits: {hits}";
-            if (shotsText != null) shotsText.text = $"Shots: {shots}";
-            if (accuracyText != null) accuracyText.text = $"Accuracy: {accuracy:F1}%";
+            if (scoreText != null) scoreText.text = $"SCORE\n<size=140%>{score}</size>";
+            if (hitsText != null) hitsText.text = $"<color=#555555>HIT</color>\n{hits}";
+            if (shotsText != null) shotsText.text = $"<color=#555555>SHOT</color>\n{shots}";
+            if (accuracyText != null) accuracyText.text = $"<color=#555555>ACC</color>\n{accuracy:F1}%";
         }
     }
 }
