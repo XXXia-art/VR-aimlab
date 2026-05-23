@@ -257,9 +257,8 @@ namespace VRAimLab
                 transform.localRotation = originalLocalRotation * Quaternion.Euler(Vector3.Lerp(targetRecoilRot, Vector3.zero, t));
                 yield return null;
             }
-
-            transform.localPosition = originalLocalPosition;
-            transform.localRotation = originalLocalRotation;
+            originalLocalPosition=transform.localPosition;
+            originalLocalRotation=transform.localRotation;
             isRecoiling = false;
         }
 
