@@ -8,6 +8,8 @@ namespace VRAimLab
         [Header("Grid Settings")]
         public int gridSize = 5;
         public float spacing = 1.2f;
+        public float spacingX = 1.2f;
+        public float spacingY = 1.2f;
         public Vector3 gridOrigin = new Vector3(0, 1.6f, 6f);
 
         [Header("Target Settings")]
@@ -41,15 +43,17 @@ namespace VRAimLab
         void GenerateGridPositions()
         {
             gridPositions.Clear();
-            float offsetX = (gridSize - 1) * spacing * 0.5f;
-            float offsetY = (gridSize - 1) * spacing * 0.5f;
+            float sx = spacingX > 0 ? spacingX : spacing;
+            float sy = spacingY > 0 ? spacingY : spacing;
+            float offsetX = (gridSize - 1) * sx * 0.5f;
+            float offsetY = (gridSize - 1) * sy * 0.5f;
             for (int x = 0; x < gridSize; x++)
             {
                 for (int y = 0; y < gridSize; y++)
                 {
                     Vector3 pos = new Vector3(
-                        gridOrigin.x + x * spacing - offsetX,
-                        gridOrigin.y + y * spacing - offsetY,
+                        gridOrigin.x + x * sx - offsetX,
+                        gridOrigin.y + y * sy - offsetY,
                         gridOrigin.z
                     );
                     gridPositions.Add(pos);
@@ -134,16 +138,18 @@ namespace VRAimLab
         {
             if (!drawGizmos) return;
 
-            float offsetX = (gridSize - 1) * spacing * 0.5f;
-            float offsetY = (gridSize - 1) * spacing * 0.5f;
+            float sx = spacingX > 0 ? spacingX : spacing;
+            float sy = spacingY > 0 ? spacingY : spacing;
+            float offsetX = (gridSize - 1) * sx * 0.5f;
+            float offsetY = (gridSize - 1) * sy * 0.5f;
             Gizmos.color = new Color(0f, 0.8f, 1f, 0.5f);
             for (int x = 0; x < gridSize; x++)
             {
                 for (int y = 0; y < gridSize; y++)
                 {
                     Vector3 pos = new Vector3(
-                        gridOrigin.x + x * spacing - offsetX,
-                        gridOrigin.y + y * spacing - offsetY,
+                        gridOrigin.x + x * sx - offsetX,
+                        gridOrigin.y + y * sy - offsetY,
                         gridOrigin.z
                     );
                     Gizmos.DrawWireSphere(pos, targetScale * 0.5f);

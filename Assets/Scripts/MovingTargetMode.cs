@@ -6,18 +6,24 @@ namespace VRAimLab
     public class MovingTargetMode : MonoBehaviour
     {
         [Header("Target")]
-        public GameObject targetPrefab;
-        public float targetScale = 0.5f;
+        public float targetScale = 0.75f;
         public float moveSpeed = 3f;
-        public float moveRange = 4f;
-        public float moveHeight = 1.6f;
-        public float moveDistance = 8f;
+        public float moveRange = 2.5f;
+        public float moveHeightMin = 1.2f;
+        public float moveHeightMax = 2.2f;
+
+        [Header("World Bounds")]
+        public float xLimit = 5.5f;      // 房间半宽减去安全边距（roomWidth=12）
+        public float yMinLimit = 0.4f;   // 地板以上（考虑球半径0.375）
+        public float yMaxLimit = 3.6f;   // 天花板以下（roomHeight=4）
+        public float moveDistanceMin = 4f;
+        public float moveDistanceMax = 6f;
         public float changeDirectionInterval = 2f;
         public LayerMask targetLayer;
 
         [Header("Difficulty")]
-        public float speedIncreasePerHit = 0.2f;
-        public float maxSpeed = 8f;
+        public float speedIncreasePerHit = 0.3f;
+        public float maxSpeed = 10f;
 
         private GameObject currentTarget;
         private float currentSpeed;
@@ -25,12 +31,18 @@ namespace VRAimLab
         private Vector3 startPosition;
         private int hitCount = 0;
         private bool isRunning = false;
+        private int moveAxis = 0; // 0=水平(X), 1=垂直(Y)
 
         public void StartMode()
         {
             isRunning = true;
             currentSpeed = moveSpeed;
             hitCount = 0;
+            // 困难模式：随机选择水平或垂直移动
+            bool isHard = GameStateManager.Instance != null && GameStateManager.Instance.SelectedDifficulty == Difficulty.Hard;
+            moveAxis = isHard ? (Random.value > 0.5f ? 1 : 0) : 0;
+            // 根据移动轴设置初始方向
+            SetMoveDirectionForAxis();
             SpawnTarget();
             StartCoroutine(ChangeDirectionRoutine());
         }
@@ -48,69 +60,103 @@ namespace VRAimLab
 
         void SpawnTarget()
         {
-            if (targetPrefab == null)
-            {
-                targetPrefab = CreateDefaultTarget();
-            }
-
-            startPosition = new Vector3(0, moveHeight, moveDistance);
-            currentTarget = Instantiate(targetPrefab, startPosition, Quaternion.identity);
+            float randomX = Random.Range(-moveRange, moveRange);
+            float randomY = Random.Range(moveHeightMin, moveHeightMax);
+            float randomZ = Random.Range(moveDistanceMin, moveDistanceMax);
+            startPosition = new Vector3(randomX, randomY, randomZ);
+            currentTarget = CreateTargetBall();
+            currentTarget.transform.position = startPosition;
             currentTarget.name = "MovingTarget";
-            currentTarget.transform.localScale = Vector3.one * targetScale;
             currentTarget.SetActive(true);
 
+            // 生成动画：从小变大
+            StartCoroutine(SpawnAnim(currentTarget));
+
+            // 确保有 MovingTargetEntity
             MovingTargetEntity entity = currentTarget.GetComponent<MovingTargetEntity>();
             if (entity == null) entity = currentTarget.AddComponent<MovingTargetEntity>();
             entity.Initialize(this);
+
+            Debug.Log($"[MovingTargetMode] 小球已生成，位置={currentTarget.transform.position}, scale={targetScale}");
         }
 
-        GameObject CreateDefaultTarget()
+        GameObject CreateTargetBall()
         {
-            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            Destroy(go.GetComponent<Collider>());
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.transform.localScale = Vector3.one * targetScale;
 
-            // 做成圆盘形状（靶子）
-            go.transform.localScale = new Vector3(0.5f, 0.02f, 0.5f);
+            // 碰撞体（Trigger，用于射线检测）
+            SphereCollider col = go.GetComponent<SphereCollider>();
+            if (col == null) col = go.AddComponent<SphereCollider>();
+            col.isTrigger = true;
 
+            // 材质：青色自发光（和 5x5 模式一致）
             Renderer rend = go.GetComponent<Renderer>();
             Material mat = new Material(Shader.Find("Standard"));
-            mat.SetColor("_Color", new Color(0.9f, 0.1f, 0.1f));
+            mat.SetColor("_Color", new Color(0.35f, 0.85f, 0.95f));
             mat.SetFloat("_Metallic", 0.1f);
-            mat.SetFloat("_Glossiness", 0.6f);
+            mat.SetFloat("_Glossiness", 0.85f);
+            mat.EnableKeyword("_EMISSION");
+            mat.SetColor("_EmissionColor", new Color(0.35f, 0.85f, 0.95f) * 0.4f);
             rend.material = mat;
 
-            // 靶心
-            GameObject center = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            center.name = "Bullseye";
-            center.transform.SetParent(go.transform);
-            center.transform.localPosition = new Vector3(0, 1f, 0);
-            center.transform.localScale = new Vector3(0.3f, 5f, 0.3f);
-            Destroy(center.GetComponent<Collider>());
-
-            Material centerMat = new Material(Shader.Find("Standard"));
-            centerMat.SetColor("_Color", new Color(1f, 1f, 1f));
-            center.GetComponent<Renderer>().material = centerMat;
-
             return go;
+        }
+
+        IEnumerator SpawnAnim(GameObject target)
+        {
+            float duration = 0.3f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                if (target == null) yield break;
+                elapsed += Time.deltaTime;
+                float t = Mathf.SmoothStep(0, 1, elapsed / duration);
+                target.transform.localScale = Vector3.one * targetScale * t;
+                yield return null;
+            }
+            if (target != null)
+                target.transform.localScale = Vector3.one * targetScale;
         }
 
         void Update()
         {
             if (!isRunning || currentTarget == null) return;
 
+            // 移动
             currentTarget.transform.position += moveDirection * currentSpeed * Time.deltaTime;
 
-            // 检查边界
-            float dist = Mathf.Abs(currentTarget.transform.position.x - startPosition.x);
-            if (dist > moveRange)
+            // 世界空间边界检测与反弹，防止穿墙
+            Vector3 pos = currentTarget.transform.position;
+
+            if (moveAxis == 0) // 水平移动（X轴）
             {
-                moveDirection = -moveDirection;
-                float clampedX = startPosition.x + Mathf.Sign(currentTarget.transform.position.x - startPosition.x) * moveRange;
-                currentTarget.transform.position = new Vector3(clampedX, currentTarget.transform.position.y, currentTarget.transform.position.z);
+                if (pos.x > xLimit)
+                {
+                    pos.x = xLimit;
+                    moveDirection = Vector3.left * Mathf.Abs(moveDirection.x);
+                }
+                else if (pos.x < -xLimit)
+                {
+                    pos.x = -xLimit;
+                    moveDirection = Vector3.right * Mathf.Abs(moveDirection.x);
+                }
+            }
+            else // 垂直移动（Y轴）
+            {
+                if (pos.y > yMaxLimit)
+                {
+                    pos.y = yMaxLimit;
+                    moveDirection = Vector3.down * Mathf.Abs(moveDirection.y);
+                }
+                else if (pos.y < yMinLimit)
+                {
+                    pos.y = yMinLimit;
+                    moveDirection = Vector3.up * Mathf.Abs(moveDirection.y);
+                }
             }
 
-            // 靶子始终面向玩家
-            currentTarget.transform.rotation = Quaternion.LookRotation(Vector3.forward);
+            currentTarget.transform.position = pos;
         }
 
         IEnumerator ChangeDirectionRoutine()
@@ -134,22 +180,26 @@ namespace VRAimLab
             // 加速
             currentSpeed = Mathf.Min(currentSpeed + speedIncreasePerHit, maxSpeed);
 
-            // 重置靶子位置
-            currentTarget.transform.position = startPosition;
-            moveDirection = Random.value > 0.5f ? Vector3.right : Vector3.left;
+            // 困难模式：重新随机选择移动轴
+            bool isHard = GameStateManager.Instance != null && GameStateManager.Instance.SelectedDifficulty == Difficulty.Hard;
+            moveAxis = isHard ? (Random.value > 0.5f ? 1 : 0) : 0;
+            SetMoveDirectionForAxis();
 
-            // 简单的缩放动画
-            StartCoroutine(HitScaleAnim());
+            // 销毁旧球，生成新球
+            if (currentTarget != null)
+            {
+                Destroy(currentTarget);
+                currentTarget = null;
+            }
+            SpawnTarget();
         }
 
-        IEnumerator HitScaleAnim()
+        void SetMoveDirectionForAxis()
         {
-            if (currentTarget == null) yield break;
-            Vector3 baseScale = Vector3.one * targetScale;
-            currentTarget.transform.localScale = baseScale * 1.3f;
-            yield return new WaitForSeconds(0.1f);
-            if (currentTarget != null)
-                currentTarget.transform.localScale = baseScale;
+            if (moveAxis == 0)
+                moveDirection = Random.value > 0.5f ? Vector3.right : Vector3.left;
+            else
+                moveDirection = Random.value > 0.5f ? Vector3.up : Vector3.down;
         }
     }
 
@@ -162,9 +212,9 @@ namespace VRAimLab
             mode = m;
         }
 
-        void OnTriggerEnter(Collider other)
+        public void Hit()
         {
-            // 被击中检测
+            mode?.OnTargetHit();
         }
     }
 }

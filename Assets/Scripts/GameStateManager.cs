@@ -4,7 +4,8 @@ using UnityEngine;
 namespace VRAimLab
 {
     public enum GameModeType { Grid5x5, MovingTarget }
-    public enum GunType { Pistol, AK47 }
+    public enum GunType { Pistol, AK47, M4 }
+    public enum Difficulty { Standard, Hard }
 
     public class GameStateManager : MonoBehaviour
     {
@@ -13,6 +14,10 @@ namespace VRAimLab
         [Header("Current Selection")]
         public GameModeType SelectedGameMode = GameModeType.Grid5x5;
         public GunType SelectedGun = GunType.Pistol;
+        public Difficulty SelectedDifficulty = Difficulty.Standard;
+
+        [Header("Settings")]
+        public float mouseSensitivity = 1.5f;
 
         [Header("State")]
         public bool IsInMenu = true;
@@ -22,6 +27,8 @@ namespace VRAimLab
         public event Action OnGameStop;
         public event Action<GameModeType> OnGameModeChanged;
         public event Action<GunType> OnGunChanged;
+        public event Action<float> OnSensitivityChanged;
+        public event Action<Difficulty> OnDifficultyChanged;
 
         void Awake()
         {
@@ -41,6 +48,13 @@ namespace VRAimLab
             SelectedGun = gun;
             OnGunChanged?.Invoke(gun);
             Debug.Log($"[GameState] 选择枪械: {gun}");
+        }
+
+        public void SelectDifficulty(Difficulty diff)
+        {
+            SelectedDifficulty = diff;
+            OnDifficultyChanged?.Invoke(diff);
+            Debug.Log($"[GameState] 选择难度: {diff}");
         }
 
         public void StartGame()

@@ -53,7 +53,12 @@ namespace VRAimLab
         public XRNode controllerNode = XRNode.RightHand;
         public bool useMouseDebug = true;
 
+        [Header("Fire Mode")]
+        [Tooltip("0 = 单发, >0 = 全自动射速（秒/发）")]
+        public float fireRate = 0f;
+
         private bool wasPressed = false;
+        private float nextFireTime = 0f;
         private InputDevice device;
         private Camera mainCam;
         private Vector3 originalLocalPosition;
@@ -72,6 +77,16 @@ namespace VRAimLab
             originalLocalPosition = transform.localPosition;
             originalLocalRotation = transform.localRotation;
             
+            if (muzzleLight == null)
+            {
+                GameObject lightObj = new GameObject("MuzzleLight");
+                lightObj.transform.SetParent(muzzleTransform, false);
+                muzzleLight = lightObj.AddComponent<Light>();
+                muzzleLight.type = LightType.Point;
+                muzzleLight.range = 3f;
+                muzzleLight.intensity = 0f;
+                muzzleLight.color = new Color(1f, 0.7f, 0.3f);
+            }
             if (muzzleLight != null)
                 muzzleLight.enabled = false;
         }
@@ -149,7 +164,7 @@ namespace VRAimLab
             }
 
             RaycastHit hit;
-            bool hitTarget = Physics.Raycast(origin, direction, out hit, maxRayDistance, targetLayer);
+            bool hitTarget = Physics.Raycast(origin, direction, out hit, maxRayDistance, targetLayer, QueryTriggerInteraction.Collide);
 
             Vector3 endPoint = hitTarget ? hit.point : origin + direction * maxRayDistance;
 
@@ -166,16 +181,29 @@ namespace VRAimLab
 
             if (useMouseDebug)
             {
-                isPressed = Input.GetMouseButtonDown(0);
+                isPressed = Input.GetMouseButton(0);
             }
             else if (device.isValid)
             {
                 device.TryGetFeatureValue(CommonUsages.triggerButton, out isPressed);
             }
 
-            if (isPressed && !wasPressed)
+            if (fireRate > 0f)
             {
-                Shoot();
+                // 全自动模式：按住连发
+                if (isPressed && Time.time >= nextFireTime)
+                {
+                    Shoot();
+                    nextFireTime = Time.time + fireRate;
+                }
+            }
+            else
+            {
+                // 单发模式：按下瞬间发射一次
+                if (isPressed && !wasPressed)
+                {
+                    Shoot();
+                }
             }
             wasPressed = isPressed;
         }
@@ -205,7 +233,7 @@ namespace VRAimLab
             ApplyRecoil();
 
             RaycastHit hit;
-            if (Physics.Raycast(origin, direction, out hit, maxRayDistance, targetLayer))
+            if (Physics.Raycast(origin, direction, out hit, maxRayDistance, targetLayer, QueryTriggerInteraction.Collide))
             {
                 SpawnHitEffect(hit.point, hit.normal);
                 
@@ -218,7 +246,21 @@ namespace VRAimLab
                 {
                     target = hit.collider.GetComponentInParent<Target>();
                     if (target != null)
+                    {
                         target.Hit();
+                    }
+                    else
+                    {
+                        MovingTargetEntity movingTarget = hit.collider.GetComponent<MovingTargetEntity>();
+                        if (movingTarget != null)
+                            movingTarget.Hit();
+                        else
+                        {
+                            movingTarget = hit.collider.GetComponentInParent<MovingTargetEntity>();
+                            if (movingTarget != null)
+                                movingTarget.Hit();
+                        }
+                    }
                 }
             }
         }

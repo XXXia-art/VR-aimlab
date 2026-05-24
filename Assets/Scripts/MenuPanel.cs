@@ -11,15 +11,26 @@ namespace VRAimLab
         public TextMeshProUGUI titleText;
         public TextMeshProUGUI modeText;
         public TextMeshProUGUI gunText;
+        public TextMeshProUGUI sensText;
         public Button startButton;
         public Button stopButton;
         public Button modeLeftButton;
         public Button modeRightButton;
         public Button gunLeftButton;
         public Button gunRightButton;
+        public Button sensLeftButton;
+        public Button sensRightButton;
+        public TextMeshProUGUI diffText;
+        public Button diffLeftButton;
+        public Button diffRightButton;
 
-        private readonly string[] modeNames = { "5x5 网格射击", "移动靶射击" };
-        private readonly string[] gunNames = { "手枪", "AK47" };
+        private readonly float sensMin = 0.5f;
+        private readonly float sensMax = 3.0f;
+        private readonly float sensStep = 0.1f;
+
+        private readonly string[] modeNames = { "5x5 Grid", "Moving Target" };
+        private readonly string[] gunNames = { "Pistol", "AK47", "M4" };
+        private readonly string[] diffNames = { "Standard", "Hard" };
 
         void Start()
         {
@@ -43,6 +54,14 @@ namespace VRAimLab
                 gunLeftButton.onClick.AddListener(() => ChangeGun(-1));
             if (gunRightButton != null)
                 gunRightButton.onClick.AddListener(() => ChangeGun(1));
+            if (sensLeftButton != null)
+                sensLeftButton.onClick.AddListener(() => ChangeSensitivity(-1));
+            if (sensRightButton != null)
+                sensRightButton.onClick.AddListener(() => ChangeSensitivity(1));
+            if (diffLeftButton != null)
+                diffLeftButton.onClick.AddListener(() => ChangeDifficulty(-1));
+            if (diffRightButton != null)
+                diffRightButton.onClick.AddListener(() => ChangeDifficulty(1));
             if (startButton != null)
                 startButton.onClick.AddListener(OnStartClicked);
             if (stopButton != null)
@@ -67,6 +86,25 @@ namespace VRAimLab
             UpdateDisplay();
         }
 
+        void ChangeSensitivity(int dir)
+        {
+            float current = GameStateManager.Instance.mouseSensitivity;
+            current += dir * sensStep;
+            current = Mathf.Round(current * 10f) / 10f;
+            current = Mathf.Clamp(current, sensMin, sensMax);
+            GameStateManager.Instance.mouseSensitivity = current;
+            UpdateDisplay();
+        }
+
+        void ChangeDifficulty(int dir)
+        {
+            int current = (int)GameStateManager.Instance.SelectedDifficulty;
+            int count = System.Enum.GetValues(typeof(Difficulty)).Length;
+            int next = (current + dir + count) % count;
+            GameStateManager.Instance.SelectDifficulty((Difficulty)next);
+            UpdateDisplay();
+        }
+
         void OnStartClicked()
         {
             GameStateManager.Instance.StartGame();
@@ -79,21 +117,21 @@ namespace VRAimLab
 
         void OnGameStarted()
         {
-            if (menuCanvas != null) menuCanvas.enabled = false;
+            // 面板保持可见，只更新按钮状态
+            UpdateDisplay();
         }
 
         void OnGameStopped()
         {
-            if (menuCanvas != null) menuCanvas.enabled = true;
             UpdateDisplay();
         }
 
         void UpdateDisplay()
         {
             if (modeText != null)
-                modeText.text = $"模式: {modeNames[(int)GameStateManager.Instance.SelectedGameMode]}";
+                modeText.text = $"Mode: {modeNames[(int)GameStateManager.Instance.SelectedGameMode]}";
             if (gunText != null)
-                gunText.text = $"枪械: {gunNames[(int)GameStateManager.Instance.SelectedGun]}";
+                gunText.text = $"Gun: {gunNames[(int)GameStateManager.Instance.SelectedGun]}";
 
             if (startButton != null)
                 startButton.gameObject.SetActive(!GameStateManager.Instance.IsPlaying);
@@ -107,6 +145,19 @@ namespace VRAimLab
                 gunLeftButton.gameObject.SetActive(!GameStateManager.Instance.IsPlaying);
             if (gunRightButton != null)
                 gunRightButton.gameObject.SetActive(!GameStateManager.Instance.IsPlaying);
+            if (sensLeftButton != null)
+                sensLeftButton.gameObject.SetActive(!GameStateManager.Instance.IsPlaying);
+            if (sensRightButton != null)
+                sensRightButton.gameObject.SetActive(!GameStateManager.Instance.IsPlaying);
+            if (diffLeftButton != null)
+                diffLeftButton.gameObject.SetActive(!GameStateManager.Instance.IsPlaying);
+            if (diffRightButton != null)
+                diffRightButton.gameObject.SetActive(!GameStateManager.Instance.IsPlaying);
+
+            if (sensText != null)
+                sensText.text = $"Sens: {GameStateManager.Instance.mouseSensitivity:F1}x";
+            if (diffText != null)
+                diffText.text = $"Diff: {diffNames[(int)GameStateManager.Instance.SelectedDifficulty]}";
         }
 
         void OnDestroy()

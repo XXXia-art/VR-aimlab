@@ -7,6 +7,7 @@ namespace VRAimLab
         public Transform cameraTransform;
         public float distance = 2.5f;
         public float height = 1.8f;
+        public float horizontalOffset = 0f;
         public bool lockYRotation = false;
 
         void Start()
@@ -19,7 +20,7 @@ namespace VRAimLab
         {
             if (cameraTransform == null) return;
 
-            Vector3 targetPos = cameraTransform.position + cameraTransform.forward * distance;
+            Vector3 targetPos = cameraTransform.position + cameraTransform.forward * distance + cameraTransform.right * horizontalOffset;
             targetPos.y = height;
             transform.position = targetPos;
 

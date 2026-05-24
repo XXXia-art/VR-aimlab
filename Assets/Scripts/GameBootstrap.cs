@@ -37,6 +37,12 @@ namespace VRAimLab
         public float gridSpacing = 0.5f;
         public float gridHeight = 1.7f;
 
+        [Header("Gun Models")]
+        public GameObject pistolModelPrefab;
+        public GameObject ak47ModelPrefab;
+        public GameObject m4ModelPrefab;
+        public float gunModelScale = 0.5f;
+
         [Header("UI")]
         public float uiDistance = 2.5f;
         public float uiHeight = 1.8f;
@@ -56,6 +62,60 @@ namespace VRAimLab
         {
             CleanupRuntimeObjects();
         }
+
+#if UNITY_EDITOR
+        [ContextMenu("VRAimLab/Auto Assign Gun Models")]
+        void AutoAssignGunModels()
+        {
+            bool changed = false;
+
+            // 搜索所有 FBX 文件
+            string[] guids = AssetDatabase.FindAssets("t:GameObject", new[] { "Assets" });
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                string ext = System.IO.Path.GetExtension(path).ToLower();
+                if (ext != ".fbx" && ext != ".prefab") continue;
+
+                GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (model == null) continue;
+
+                string name = System.IO.Path.GetFileNameWithoutExtension(path).ToLower().Replace(" ", "").Replace("_", "").Replace("-", "");
+                string folder = System.IO.Path.GetDirectoryName(path).ToLower().Replace(" ", "").Replace("_", "").Replace("-", "").Replace("\\", "/");
+
+                if (pistolModelPrefab == null && (name.Contains("pistol") || name.Contains("handgun") || name.Contains("glock") || name.Contains("m1911") || name.Contains("nokobot")))
+                {
+                    pistolModelPrefab = model;
+                    Debug.Log($"[AutoAssign] 手枪模型: {path}");
+                    changed = true;
+                }
+                else if (ak47ModelPrefab == null && (name.Contains("ak47") || name.Contains("ak") || name.Contains("kalash")))
+                {
+                    ak47ModelPrefab = model;
+                    Debug.Log($"[AutoAssign] AK47 模型: {path}");
+                    changed = true;
+                }
+                else if (m4ModelPrefab == null && (name.Contains("m16") || name.Contains("m4") || name.Contains("ar15") || name.Contains("rifle")))
+                {
+                    m4ModelPrefab = model;
+                    Debug.Log($"[AutoAssign] M4 模型: {path}");
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                EditorUtility.SetDirty(this);
+                if (!Application.isPlaying)
+                    EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                Debug.Log("[AutoAssign] 枪械模型已自动分配，请 Ctrl+S 保存场景！");
+            }
+            else
+            {
+                Debug.LogWarning("[AutoAssign] 未找到可匹配的 FBX 模型。请确认项目中有 pistol/ak47/m16 等命名的 .fbx 文件。");
+            }
+        }
+#endif
 
         void Awake()
         {
@@ -115,8 +175,12 @@ namespace VRAimLab
             GameObject gridObj = FindOrCreate("GridManager", true);
             gridManager = gridObj.GetComponent<GridManager>();
             if (gridManager == null) gridManager = gridObj.AddComponent<GridManager>();
-            gridManager.gridSize = gridSize;
-            gridManager.spacing = gridSpacing;
+
+            // 根据难度调整网格
+            bool isHard = GameStateManager.Instance.SelectedDifficulty == Difficulty.Hard;
+            gridManager.gridSize = gridSize; // 保持 5x5
+            gridManager.spacingX = isHard ? 1.5f : gridSpacing; // 横向增大
+            gridManager.spacingY = isHard ? 0.7f : gridSpacing; // 上下稍增，避免超出房间边界
             gridManager.gridOrigin = new Vector3(0, gridHeight, gridDistance);
             gridManager.maxActiveTargets = maxActiveTargets;
             gridManager.targetScale = targetScale;
@@ -157,14 +221,25 @@ namespace VRAimLab
             if (gridObj != null) Destroy(gridObj);
 
             GameObject targetTemplate = GameObject.Find("TargetTemplate");
-            if (targetTemplate != null) Destroy(targetTemplate);
+            if (targetTemplate != null)
+            {
+#if UNITY_EDITOR
+                DestroyImmediate(targetTemplate);
+#else
+                Destroy(targetTemplate);
+#endif
+            }
 
             GameObject modeObj = GameObject.Find("MovingTargetMode");
             if (modeObj != null)
             {
                 var mode = modeObj.GetComponent<MovingTargetMode>();
                 mode?.StopMode();
+#if UNITY_EDITOR
+                DestroyImmediate(modeObj);
+#else
                 Destroy(modeObj);
+#endif
             }
 
             GameObject movingTarget = GameObject.Find("MovingTarget");
@@ -231,6 +306,12 @@ namespace VRAimLab
             camMouseAim.sensitivity = 1.5f;
             camMouseAim.minPitch = -40f;
             camMouseAim.maxPitch = 40f;
+
+            // WorldSpace UI 中心射线交互（编辑器调试用）
+            var uiInteractor = cam.GetComponent<WorldSpaceUIInteractor>();
+            if (uiInteractor == null) uiInteractor = cam.gameObject.AddComponent<WorldSpaceUIInteractor>();
+            uiInteractor.maxDistance = 8f;
+            uiInteractor.showCenterDot = true;
         }
 
         void BuildRoom(bool runtime)
@@ -339,6 +420,10 @@ namespace VRAimLab
                 gunSelector = rightHand.AddComponent<GunSelector>();
                 gunSelector.gunParent = rightHand.transform;
             }
+            gunSelector.pistolModelPrefab = pistolModelPrefab;
+            gunSelector.ak47ModelPrefab = ak47ModelPrefab;
+            gunSelector.m4ModelPrefab = m4ModelPrefab;
+            gunSelector.gunModelScale = gunModelScale;
             // 菜单状态下也显示默认枪械
             gunSelector.RefreshGun();
 
@@ -384,15 +469,18 @@ namespace VRAimLab
             }
 
             RectTransform canvasRT = canvasObj.GetComponent<RectTransform>();
-            canvasRT.sizeDelta = new Vector2(800f, 450f);
-            canvasObj.transform.localScale = Vector3.one * 0.003f;
+            canvasRT.sizeDelta = new Vector2(1000f, 650f);
+            canvasObj.transform.localScale = Vector3.one * 0.006f;
 
+            // 固定在右墙上，面向房间中心（和左墙菜单面板对称）
+            Vector3 scorePos = new Vector3(roomWidth * 0.5f - 0.15f, 1.6f, 0f);
+            canvasObj.transform.position = scorePos;
+            canvasObj.transform.LookAt(new Vector3(0, 1.6f, 0));
+            canvasObj.transform.Rotate(0, 180, 0);
+
+            // 移除旧的 UIFaceCamera（不再跟随相机）
             UIFaceCamera uiFace = canvasObj.GetComponent<UIFaceCamera>();
-            if (uiFace == null) uiFace = canvasObj.AddComponent<UIFaceCamera>();
-            uiFace.cameraTransform = Camera.main.transform;
-            uiFace.distance = uiDistance;
-            uiFace.height = uiHeight;
-            uiFace.lockYRotation = true;
+            if (uiFace != null) Destroy(uiFace);
 
             GameObject panel = GameObject.Find("Panel");
             if (panel == null)
@@ -409,12 +497,12 @@ namespace VRAimLab
                 panelImg.color = new Color(0.05f, 0.05f, 0.06f, 0.85f);
             }
 
-            CreateTextElement("Title", canvasObj.transform, "VR AIM LAB", new Vector2(0, 0.75f), new Vector2(1, 1f), 36, new Color(0f, 0.85f, 0.95f), true);
-            CreateTextElement("ScoreText", canvasObj.transform, "Score: 0", new Vector2(0, 0.45f), new Vector2(1, 0.72f), 22, Color.white);
-            CreateTextElement("HitsText", canvasObj.transform, "Hits: 0", new Vector2(0, 0.2f), new Vector2(0.33f, 0.45f), 18, Color.white);
-            CreateTextElement("ShotsText", canvasObj.transform, "Shots: 0", new Vector2(0.33f, 0.2f), new Vector2(0.66f, 0.45f), 18, Color.white);
-            CreateTextElement("AccuracyText", canvasObj.transform, "Accuracy: 0.0%", new Vector2(0.66f, 0.2f), new Vector2(1, 0.45f), 18, Color.white);
-            CreateTextElement("TimeText", canvasObj.transform, "Time: 00:00", new Vector2(0, -0.05f), new Vector2(1, 0.2f), 20, new Color(0.7f, 0.7f, 0.7f));
+            CreateTextElement("Title", canvasObj.transform, "VR AIM LAB", new Vector2(0, 0.78f), new Vector2(1, 1f), 48, new Color(0f, 0.85f, 0.95f), true);
+            CreateTextElement("ScoreText", canvasObj.transform, "Score: 0", new Vector2(0, 0.48f), new Vector2(1, 0.75f), 32, Color.white);
+            CreateTextElement("HitsText", canvasObj.transform, "Hits: 0", new Vector2(0, 0.22f), new Vector2(0.33f, 0.48f), 24, Color.white);
+            CreateTextElement("ShotsText", canvasObj.transform, "Shots: 0", new Vector2(0.33f, 0.22f), new Vector2(0.66f, 0.48f), 24, Color.white);
+            CreateTextElement("AccuracyText", canvasObj.transform, "Accuracy: 0.0%", new Vector2(0.66f, 0.22f), new Vector2(1, 0.48f), 24, Color.white);
+            CreateTextElement("TimeText", canvasObj.transform, "Time: 00:00", new Vector2(0, -0.02f), new Vector2(1, 0.22f), 28, new Color(0.7f, 0.7f, 0.7f));
         }
 
         void SetupMenu(bool runtime)
@@ -443,15 +531,18 @@ namespace VRAimLab
                 menuScaler.referencePixelsPerUnit = 100f;
             }
 
+            GraphicRaycaster menuRaycaster = menuCanvasObj.GetComponent<GraphicRaycaster>();
+            if (menuRaycaster == null) menuCanvasObj.AddComponent<GraphicRaycaster>();
+
             RectTransform menuRT = menuCanvasObj.GetComponent<RectTransform>();
             if (menuRT == null) menuRT = menuCanvasObj.AddComponent<RectTransform>();
-            menuRT.sizeDelta = new Vector2(700f, 500f);
-            menuCanvasObj.transform.localScale = Vector3.one * 0.003f;
+            menuRT.sizeDelta = new Vector2(700f, 700f);
+            menuCanvasObj.transform.localScale = Vector3.one * 0.006f;
 
             // 放在左墙上，面向房间中心
-            Vector3 menuPos = new Vector3(-roomWidth * 0.5f + 0.25f, 1.8f, gridDistance * 0.5f);
+            Vector3 menuPos = new Vector3(-roomWidth * 0.5f + 0.15f, 1.6f, 0f);
             menuCanvasObj.transform.position = menuPos;
-            menuCanvasObj.transform.LookAt(new Vector3(0, 1.6f, gridDistance * 0.3f));
+            menuCanvasObj.transform.LookAt(new Vector3(0, 1.6f, 0));
             menuCanvasObj.transform.Rotate(0, 180, 0); // Canvas 背面是正面，需要翻转
 
             // 背景
@@ -470,23 +561,44 @@ namespace VRAimLab
             }
 
             // 标题
-            CreateTextElement("MenuTitle", menuCanvasObj.transform, "设 置", new Vector2(0, 0.82f), new Vector2(1, 1f), 40, new Color(0f, 0.85f, 0.95f), true);
+            CreateTextElement("MenuTitle", menuCanvasObj.transform, "SETTINGS", new Vector2(0, 0.92f), new Vector2(1, 1f), 36, new Color(0f, 0.85f, 0.95f), true);
 
-            // 游戏模式选择
-            CreateTextElement("ModeLabel", menuCanvasObj.transform, "游戏模式", new Vector2(0.1f, 0.62f), new Vector2(0.9f, 0.78f), 22, new Color(0.8f, 0.8f, 0.8f));
-            CreateButton("ModeLeftBtn", menuCanvasObj.transform, "<", new Vector2(0.1f, 0.48f), new Vector2(0.2f, 0.6f), () => { });
-            CreateTextElement("ModeValue", menuCanvasObj.transform, "5x5 网格射击", new Vector2(0.22f, 0.48f), new Vector2(0.78f, 0.6f), 24, Color.white);
-            CreateButton("ModeRightBtn", menuCanvasObj.transform, ">", new Vector2(0.8f, 0.48f), new Vector2(0.9f, 0.6f), () => { });
+            // Game Mode Selection
+            CreateTextElement("ModeLabel", menuCanvasObj.transform, "GAME MODE", new Vector2(0.1f, 0.84f), new Vector2(0.9f, 0.92f), 20, new Color(0.8f, 0.8f, 0.8f));
+            CreateButton("ModeLeftBtn", menuCanvasObj.transform, "<", new Vector2(0.1f, 0.76f), new Vector2(0.2f, 0.84f), () => { });
+            CreateTextElement("ModeValue", menuCanvasObj.transform, "5x5 Grid", new Vector2(0.22f, 0.76f), new Vector2(0.78f, 0.84f), 24, Color.white);
+            CreateButton("ModeRightBtn", menuCanvasObj.transform, ">", new Vector2(0.8f, 0.76f), new Vector2(0.9f, 0.84f), () => { });
 
-            // 枪械选择
-            CreateTextElement("GunLabel", menuCanvasObj.transform, "枪械选择", new Vector2(0.1f, 0.32f), new Vector2(0.9f, 0.46f), 22, new Color(0.8f, 0.8f, 0.8f));
-            CreateButton("GunLeftBtn", menuCanvasObj.transform, "<", new Vector2(0.1f, 0.18f), new Vector2(0.2f, 0.3f), () => { });
-            CreateTextElement("GunValue", menuCanvasObj.transform, "手枪", new Vector2(0.22f, 0.18f), new Vector2(0.78f, 0.3f), 24, Color.white);
-            CreateButton("GunRightBtn", menuCanvasObj.transform, ">", new Vector2(0.8f, 0.18f), new Vector2(0.9f, 0.3f), () => { });
+            // Gun Selection
+            CreateTextElement("GunLabel", menuCanvasObj.transform, "WEAPON", new Vector2(0.1f, 0.68f), new Vector2(0.9f, 0.76f), 20, new Color(0.8f, 0.8f, 0.8f));
+            CreateButton("GunLeftBtn", menuCanvasObj.transform, "<", new Vector2(0.1f, 0.6f), new Vector2(0.2f, 0.68f), () => { });
+            CreateTextElement("GunValue", menuCanvasObj.transform, "Pistol", new Vector2(0.22f, 0.6f), new Vector2(0.78f, 0.68f), 24, Color.white);
+            CreateButton("GunRightBtn", menuCanvasObj.transform, ">", new Vector2(0.8f, 0.6f), new Vector2(0.9f, 0.68f), () => { });
 
-            // 开始/停止按钮
-            CreateButton("StartBtn", menuCanvasObj.transform, "开始游戏", new Vector2(0.2f, 0.02f), new Vector2(0.8f, 0.14f), () => { }, new Color(0.1f, 0.6f, 0.3f));
-            CreateButton("StopBtn", menuCanvasObj.transform, "停止游戏", new Vector2(0.2f, 0.02f), new Vector2(0.8f, 0.14f), () => { }, new Color(0.6f, 0.15f, 0.15f));
+            // Sensitivity
+            CreateTextElement("SensLabel", menuCanvasObj.transform, "SENSITIVITY", new Vector2(0.1f, 0.52f), new Vector2(0.9f, 0.6f), 20, new Color(0.8f, 0.8f, 0.8f));
+            CreateButton("SensLeftBtn", menuCanvasObj.transform, "<", new Vector2(0.1f, 0.44f), new Vector2(0.2f, 0.52f), () => { });
+            CreateTextElement("SensValue", menuCanvasObj.transform, "1.5x", new Vector2(0.22f, 0.44f), new Vector2(0.78f, 0.52f), 24, Color.white);
+            CreateButton("SensRightBtn", menuCanvasObj.transform, ">", new Vector2(0.8f, 0.44f), new Vector2(0.9f, 0.52f), () => { });
+
+            // Difficulty
+            CreateTextElement("DiffLabel", menuCanvasObj.transform, "DIFFICULTY", new Vector2(0.1f, 0.36f), new Vector2(0.9f, 0.44f), 20, new Color(0.8f, 0.8f, 0.8f));
+            CreateButton("DiffLeftBtn", menuCanvasObj.transform, "<", new Vector2(0.1f, 0.28f), new Vector2(0.2f, 0.36f), () => { });
+            CreateTextElement("DiffValue", menuCanvasObj.transform, "Standard", new Vector2(0.22f, 0.28f), new Vector2(0.78f, 0.36f), 24, Color.white);
+            CreateButton("DiffRightBtn", menuCanvasObj.transform, ">", new Vector2(0.8f, 0.28f), new Vector2(0.9f, 0.36f), () => { });
+
+            // Start/Stop Buttons
+            CreateButton("StartBtn", menuCanvasObj.transform, "START", new Vector2(0.2f, 0.14f), new Vector2(0.8f, 0.26f), () => { }, new Color(0.1f, 0.6f, 0.3f));
+            CreateButton("StopBtn", menuCanvasObj.transform, "STOP", new Vector2(0.2f, 0.14f), new Vector2(0.8f, 0.26f), () => { }, new Color(0.6f, 0.15f, 0.15f));
+
+            // 确保场景中有 EventSystem（UI 点击必需）
+            GameObject eventSystem = GameObject.Find("EventSystem");
+            if (eventSystem == null)
+            {
+                eventSystem = new GameObject("EventSystem");
+                eventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                eventSystem.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+            }
 
             // MenuPanel 控制器
             MenuPanel panel = menuCanvasObj.GetComponent<MenuPanel>();
@@ -495,12 +607,18 @@ namespace VRAimLab
             panel.titleText = GetText("MenuTitle");
             panel.modeText = GetText("ModeValue");
             panel.gunText = GetText("GunValue");
+            panel.sensText = GetText("SensValue");
+            panel.diffText = GetText("DiffValue");
             panel.startButton = GetButton("StartBtn");
             panel.stopButton = GetButton("StopBtn");
             panel.modeLeftButton = GetButton("ModeLeftBtn");
             panel.modeRightButton = GetButton("ModeRightBtn");
             panel.gunLeftButton = GetButton("GunLeftBtn");
             panel.gunRightButton = GetButton("GunRightBtn");
+            panel.sensLeftButton = GetButton("SensLeftBtn");
+            panel.sensRightButton = GetButton("SensRightBtn");
+            panel.diffLeftButton = GetButton("DiffLeftBtn");
+            panel.diffRightButton = GetButton("DiffRightBtn");
         }
 
         void SetupHitEffects(bool runtime)
@@ -666,12 +784,13 @@ namespace VRAimLab
             string[] names = new[] {
                 "Floor", "BackWall", "LeftWall", "RightWall", "Ceiling",
                 "RightHand", "GunVisual", "GunRoot", "GunBody", "GunGrip", "GunBarrel", "AK47",
+                "GunModel_Pistol", "GunModel_AK47", "GunModel_M4",
                 "TargetTemplate", "GridManager", "ScoreManager", "ScoreCanvas", "Panel", "Title",
                 "ScoreText", "HitsText", "ShotsText", "AccuracyText", "TimeText",
                 "HitEffectPool", "FillLight", "ScreenCrosshair",
                 "CrosshairTop", "CrosshairBottom", "CrosshairLeft", "CrosshairRight",
-                "MenuCanvas", "MenuPanel", "MenuTitle", "ModeLabel", "ModeValue", "GunLabel", "GunValue",
-                "ModeLeftBtn", "ModeRightBtn", "GunLeftBtn", "GunRightBtn", "StartBtn", "StopBtn",
+                "MenuCanvas", "MenuPanel", "MenuTitle", "ModeLabel", "ModeValue", "GunLabel", "GunValue", "SensLabel", "SensValue", "DiffLabel", "DiffValue",
+                "ModeLeftBtn", "ModeRightBtn", "GunLeftBtn", "GunRightBtn", "SensLeftBtn", "SensRightBtn", "DiffLeftBtn", "DiffRightBtn", "StartBtn", "StopBtn",
                 "GameStateManager", "MovingTargetMode", "MovingTarget"
             };
             foreach (var n in names)

@@ -40,8 +40,9 @@ namespace VRAimLab
 
             if (cursorLocked || !Application.isEditor)
             {
-                yaw += Input.GetAxis("Mouse X") * sensitivity;
-                pitch -= Input.GetAxis("Mouse Y") * sensitivity;
+                float sens = GameStateManager.Instance != null ? GameStateManager.Instance.mouseSensitivity : sensitivity;
+                yaw += Input.GetAxis("Mouse X") * sens;
+                pitch -= Input.GetAxis("Mouse Y") * sens;
                 pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
                 transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
             }
