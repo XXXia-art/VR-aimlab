@@ -193,7 +193,11 @@ namespace VRAimLab
 
             if (useMouseDebug)
             {
+#if ENABLE_LEGACY_INPUT_MANAGER
                 isPressed = Input.GetMouseButton(0);
+#else
+                isPressed = false;
+#endif
             }
             else if (device.isValid)
             {

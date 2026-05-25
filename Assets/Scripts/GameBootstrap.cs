@@ -854,12 +854,15 @@ namespace VRAimLab
             CreateButton("StopBtn", menuCanvasObj.transform, "STOP", new Vector2(0.2f, 0.14f), new Vector2(0.8f, 0.26f), () => { }, new Color(0.6f, 0.15f, 0.15f));
 
             // 确保场景中有 EventSystem（UI 点击必需）
+            // 注意：WorldSpaceUIInteractor 已手动实现射线交互，不依赖 EventSystem 的输入模块
             GameObject eventSystem = GameObject.Find("EventSystem");
             if (eventSystem == null)
             {
                 eventSystem = new GameObject("EventSystem");
                 eventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+#if ENABLE_LEGACY_INPUT_MANAGER
                 eventSystem.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+#endif
             }
 
             // MenuPanel 控制器
