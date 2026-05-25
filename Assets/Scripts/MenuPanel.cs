@@ -28,7 +28,7 @@ namespace VRAimLab
         private readonly float sensMax = 3.0f;
         private readonly float sensStep = 0.1f;
 
-        private readonly string[] modeNames = { "5x5 Grid", "Moving Target" };
+        private readonly string[] modeNames = { "5x5 Grid", "Moving Target", "Reaction Shot", "Tracking Shot" };
         private readonly string[] gunNames = { "Pistol", "AK47", "M4" };
         private readonly string[] diffNames = { "Standard", "Hard" };
 

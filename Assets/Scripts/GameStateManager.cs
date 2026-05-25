@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace VRAimLab
 {
-    public enum GameModeType { Grid5x5, MovingTarget }
+    public enum GameModeType { Grid5x5, MovingTarget, ReactionTarget, TrackingShot }
     public enum GunType { Pistol, AK47, M4 }
     public enum Difficulty { Standard, Hard }
 

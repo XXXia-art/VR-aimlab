@@ -50,6 +50,7 @@ namespace VRAimLab
         private LayerMask targetLayerMask;
         private GridManager gridManager;
         private MovingTargetMode movingTargetMode;
+        private ReactionTargetMode reactionTargetMode;
 
         [ContextMenu("VRAimLab/Build Full Scene")]
         void BuildSceneMenu()
@@ -129,9 +130,14 @@ namespace VRAimLab
             BuildRoom(runtime);
             SetupGun(runtime);
             SetupScoreUI(runtime);
+            SetupComboDisplay(runtime);
+            SetupTimerHUD(runtime);
+            SetupResultHUD(runtime);
+            SetupScoreChart(runtime);
             SetupMenu(runtime);
             SetupHitEffects(runtime);
             SetupGameState(runtime);
+            SetupRecordManager(runtime);
 
 #if UNITY_EDITOR
             if (!runtime)
@@ -156,10 +162,21 @@ namespace VRAimLab
         {
             CleanupGameplay();
 
-            if (GameStateManager.Instance.SelectedGameMode == GameModeType.Grid5x5)
-                StartGridMode();
-            else
-                StartMovingTargetMode();
+            switch (GameStateManager.Instance.SelectedGameMode)
+            {
+                case GameModeType.Grid5x5:
+                    StartGridMode();
+                    break;
+                case GameModeType.MovingTarget:
+                    StartMovingTargetMode();
+                    break;
+                case GameModeType.ReactionTarget:
+                    StartReactionTargetMode();
+                    break;
+                case GameModeType.TrackingShot:
+                    StartTrackingShotMode();
+                    break;
+            }
 
             GunSelector selector = FindObjectOfType<GunSelector>();
             selector?.RefreshGun();
@@ -198,6 +215,8 @@ namespace VRAimLab
             ScoreManager sm = scoreObj.GetComponent<ScoreManager>();
             if (sm == null) sm = scoreObj.AddComponent<ScoreManager>();
             LinkScoreUI(sm);
+
+            gridManager.StartGame();
         }
 
         void StartMovingTargetMode()
@@ -215,10 +234,45 @@ namespace VRAimLab
             LinkScoreUI(sm);
         }
 
+        void StartReactionTargetMode()
+        {
+            GameObject modeObj = FindOrCreate("ReactionTargetMode", true);
+            reactionTargetMode = modeObj.GetComponent<ReactionTargetMode>();
+            if (reactionTargetMode == null) reactionTargetMode = modeObj.AddComponent<ReactionTargetMode>();
+            reactionTargetMode.targetLayer = targetLayerMask;
+            reactionTargetMode.StartMode();
+
+            // ScoreManager
+            GameObject scoreObj = FindOrCreate("ScoreManager", true);
+            ScoreManager sm = scoreObj.GetComponent<ScoreManager>();
+            if (sm == null) sm = scoreObj.AddComponent<ScoreManager>();
+            LinkScoreUI(sm);
+        }
+
+        void StartTrackingShotMode()
+        {
+            GameObject modeObj = FindOrCreate("TrackingTargetMode", true);
+            TrackingTargetMode trackingMode = modeObj.GetComponent<TrackingTargetMode>();
+            if (trackingMode == null) trackingMode = modeObj.AddComponent<TrackingTargetMode>();
+            trackingMode.targetLayer = targetLayerMask;
+            trackingMode.StartMode();
+
+            GameObject scoreObj = FindOrCreate("ScoreManager", true);
+            ScoreManager sm = scoreObj.GetComponent<ScoreManager>();
+            if (sm == null) sm = scoreObj.AddComponent<ScoreManager>();
+            LinkScoreUI(sm);
+        }
+
         void CleanupGameplay()
         {
             GameObject gridObj = GameObject.Find("GridManager");
             if (gridObj != null) Destroy(gridObj);
+
+            GameObject reactionObj = GameObject.Find("ReactionTargetMode");
+            if (reactionObj != null) Destroy(reactionObj);
+
+            GameObject trackingObj = GameObject.Find("TrackingTargetMode");
+            if (trackingObj != null) Destroy(trackingObj);
 
             GameObject targetTemplate = GameObject.Find("TargetTemplate");
             if (targetTemplate != null)
@@ -335,13 +389,17 @@ namespace VRAimLab
             floorMat.SetFloat("_Metallic", 0f);
             floor.GetComponent<Renderer>().material = floorMat;
 
-            GameObject backWall = FindOrCreatePrimitive("BackWall", PrimitiveType.Cube, runtime);
+            GameObject backWall = FindOrCreatePrimitive("BackWall", PrimitiveType.Quad, runtime);
             backWall.transform.position = new Vector3(0, roomHeight * 0.5f, gridDistance + 0.5f);
-            backWall.transform.localScale = new Vector3(roomWidth, roomHeight, 0.2f);
+            backWall.transform.localScale = new Vector3(roomWidth, roomHeight, 1f);
+            backWall.transform.rotation = Quaternion.Euler(0, 180, 0);
             Material backWallMat = new Material(Shader.Find("Standard"));
             backWallMat.mainTexture = wallTex;
+            backWallMat.color = new Color(0.45f, 0.47f, 0.5f);
             backWallMat.SetFloat("_Glossiness", 0.05f);
             backWallMat.SetFloat("_Metallic", 0f);
+            backWallMat.EnableKeyword("_EMISSION");
+            backWallMat.SetColor("_EmissionColor", new Color(0.12f, 0.12f, 0.15f));
             backWall.GetComponent<Renderer>().material = backWallMat;
 
             GameObject leftWall = FindOrCreatePrimitive("LeftWall", PrimitiveType.Cube, runtime);
@@ -498,11 +556,179 @@ namespace VRAimLab
             }
 
             CreateTextElement("Title", canvasObj.transform, "VR AIM LAB", new Vector2(0, 0.78f), new Vector2(1, 1f), 48, new Color(0f, 0.85f, 0.95f), true);
-            CreateTextElement("ScoreText", canvasObj.transform, "Score: 0", new Vector2(0, 0.48f), new Vector2(1, 0.75f), 32, Color.white);
-            CreateTextElement("HitsText", canvasObj.transform, "Hits: 0", new Vector2(0, 0.22f), new Vector2(0.33f, 0.48f), 24, Color.white);
-            CreateTextElement("ShotsText", canvasObj.transform, "Shots: 0", new Vector2(0.33f, 0.22f), new Vector2(0.66f, 0.48f), 24, Color.white);
-            CreateTextElement("AccuracyText", canvasObj.transform, "Accuracy: 0.0%", new Vector2(0.66f, 0.22f), new Vector2(1, 0.48f), 24, Color.white);
-            CreateTextElement("TimeText", canvasObj.transform, "Time: 00:00", new Vector2(0, -0.02f), new Vector2(1, 0.22f), 28, new Color(0.7f, 0.7f, 0.7f));
+            CreateTextElement("ScoreText", canvasObj.transform, "Score: 0", new Vector2(0, 0.40f), new Vector2(1, 0.70f), 32, Color.white);
+            CreateTextElement("HitsText", canvasObj.transform, "Hits: 0", new Vector2(0, 0.14f), new Vector2(0.33f, 0.40f), 24, Color.white);
+            CreateTextElement("ShotsText", canvasObj.transform, "Shots: 0", new Vector2(0.33f, 0.14f), new Vector2(0.66f, 0.40f), 24, Color.white);
+            CreateTextElement("AccuracyText", canvasObj.transform, "Accuracy: 0.0%", new Vector2(0.66f, 0.14f), new Vector2(1, 0.40f), 24, Color.white);
+        }
+
+        void SetupComboDisplay(bool runtime)
+        {
+            GameObject comboCanvasObj = GameObject.Find("ComboCanvas");
+            if (comboCanvasObj == null)
+            {
+                comboCanvasObj = new GameObject("ComboCanvas");
+                Canvas canvas = comboCanvasObj.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.worldCamera = Camera.main;
+                canvas.sortingOrder = 200;
+
+                RectTransform rt = comboCanvasObj.GetComponent<RectTransform>();
+                rt.sizeDelta = new Vector2(500f, 250f);
+                comboCanvasObj.transform.localScale = Vector3.one * 0.004f;
+
+                UIFaceCamera faceCam = comboCanvasObj.AddComponent<UIFaceCamera>();
+                faceCam.distance = 1.5f;
+                faceCam.height = 1.5f;
+                faceCam.horizontalOffset = 0.6f;
+                faceCam.lockYRotation = false;
+            }
+
+            // 背景面板（黑色背景已移除，保持透明）
+            GameObject comboPanel = GameObject.Find("ComboPanel");
+            if (comboPanel != null)
+            {
+                UnityEngine.UI.Image img = comboPanel.GetComponent<UnityEngine.UI.Image>();
+                if (img != null) img.color = new Color(0, 0, 0, 0);
+            }
+
+            CreateTextElement("ComboText", comboCanvasObj.transform, "", new Vector2(0, 0), new Vector2(1, 1), 18, new Color(1f, 0.35f, 0f), true);
+        }
+
+        void SetupTimerHUD(bool runtime)
+        {
+            GameObject timerCanvasObj = GameObject.Find("TimerCanvas");
+            if (timerCanvasObj == null)
+            {
+                timerCanvasObj = new GameObject("TimerCanvas");
+                Canvas canvas = timerCanvasObj.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.worldCamera = Camera.main;
+                canvas.sortingOrder = 150;
+
+                RectTransform rt = timerCanvasObj.GetComponent<RectTransform>();
+                rt.sizeDelta = new Vector2(400f, 120f);
+                timerCanvasObj.transform.localScale = Vector3.one * 0.004f;
+
+                UIFaceCamera faceCam = timerCanvasObj.AddComponent<UIFaceCamera>();
+                faceCam.distance = 2.0f;
+                faceCam.height = 2.2f;
+                faceCam.horizontalOffset = 0f;
+                faceCam.lockYRotation = false;
+            }
+
+            CreateTextElement("TimerText", timerCanvasObj.transform, "30", new Vector2(0, 0), new Vector2(1, 1), 48, Color.white, true);
+        }
+
+        void SetupResultHUD(bool runtime)
+        {
+            GameObject resultCanvasObj = GameObject.Find("ResultCanvas");
+            if (resultCanvasObj == null)
+            {
+                resultCanvasObj = new GameObject("ResultCanvas");
+                Canvas canvas = resultCanvasObj.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.worldCamera = Camera.main;
+                canvas.sortingOrder = 300;
+
+                RectTransform rt = resultCanvasObj.GetComponent<RectTransform>();
+                rt.sizeDelta = new Vector2(600f, 400f);
+                resultCanvasObj.transform.localScale = Vector3.one * 0.004f;
+
+                UIFaceCamera faceCam = resultCanvasObj.AddComponent<UIFaceCamera>();
+                faceCam.distance = 2.0f;
+                faceCam.height = 1.6f;
+                faceCam.horizontalOffset = 0f;
+                faceCam.lockYRotation = false;
+            }
+        }
+
+        void SetupScoreChart(bool runtime)
+        {
+            // 背墙成绩展示面板
+            GameObject chartCanvasObj = GameObject.Find("ScoreChartCanvas");
+            if (chartCanvasObj == null)
+            {
+                chartCanvasObj = new GameObject("ScoreChartCanvas");
+                Canvas canvas = chartCanvasObj.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.worldCamera = Camera.main;
+                canvas.sortingOrder = 50;
+
+                RectTransform rt = chartCanvasObj.GetComponent<RectTransform>();
+                rt.sizeDelta = new Vector2(560f, 320f);
+                chartCanvasObj.transform.localScale = Vector3.one * 0.005f;
+
+                // 挂在入口墙后方（用户背后），面向房间内部
+                chartCanvasObj.transform.position = new Vector3(0f, roomHeight * 0.5f - 0.2f, -2.0f);
+                chartCanvasObj.transform.rotation = Quaternion.Euler(0, 180, 0);
+            }
+
+            GameObject chartPanel = GameObject.Find("ScoreChartPanel");
+            if (chartPanel == null)
+            {
+                chartPanel = new GameObject("ScoreChartPanel");
+                chartPanel.transform.SetParent(chartCanvasObj.transform, false);
+                RectTransform panelRT = chartPanel.AddComponent<RectTransform>();
+                panelRT.anchorMin = Vector2.zero;
+                panelRT.anchorMax = Vector2.one;
+                panelRT.offsetMin = Vector2.zero;
+                panelRT.offsetMax = Vector2.zero;
+                UnityEngine.UI.Image img = chartPanel.AddComponent<UnityEngine.UI.Image>();
+                img.color = new Color(0.08f, 0.08f, 0.1f, 0.75f);
+            }
+
+            // 标题
+            CreateTextElement("ChartTitle", chartCanvasObj.transform, "SCORE HISTORY", new Vector2(0, 0.84f), new Vector2(1, 1f), 36, new Color(0f, 0.85f, 0.95f), true);
+            // 统计信息
+            CreateTextElement("ChartStat", chartCanvasObj.transform, "Select mode & difficulty to view history", new Vector2(0, 0.72f), new Vector2(1, 0.84f), 22, new Color(0.85f, 0.85f, 0.85f));
+
+            // 折线
+            GameObject lineObj = GameObject.Find("ChartLine");
+            if (lineObj == null)
+            {
+                lineObj = new GameObject("ChartLine");
+                lineObj.transform.SetParent(chartCanvasObj.transform, false);
+                RectTransform lineRT = lineObj.AddComponent<RectTransform>();
+                lineRT.anchorMin = new Vector2(0.08f, 0.15f);
+                lineRT.anchorMax = new Vector2(0.92f, 0.65f);
+                lineRT.offsetMin = Vector2.zero;
+                lineRT.offsetMax = Vector2.zero;
+                lineRT.pivot = new Vector2(0, 0);
+                UILineRenderer lr = lineObj.AddComponent<UILineRenderer>();
+                lr.color = new Color(0f, 0.85f, 0.95f);
+                lr.thickness = 3f;
+            }
+
+            // 数据点根节点
+            GameObject pointsObj = GameObject.Find("ChartPoints");
+            if (pointsObj == null)
+            {
+                pointsObj = new GameObject("ChartPoints");
+                pointsObj.transform.SetParent(chartCanvasObj.transform, false);
+                RectTransform pointsRT = pointsObj.AddComponent<RectTransform>();
+                pointsRT.anchorMin = new Vector2(0.08f, 0.15f);
+                pointsRT.anchorMax = new Vector2(0.92f, 0.65f);
+                pointsRT.offsetMin = Vector2.zero;
+                pointsRT.offsetMax = Vector2.zero;
+                pointsRT.pivot = new Vector2(0, 0);
+            }
+
+            // 绑定 ScoreChart 控制器
+            ScoreChart chart = chartCanvasObj.GetComponent<ScoreChart>();
+            if (chart == null) chart = chartCanvasObj.AddComponent<ScoreChart>();
+            chart.Setup(chartCanvasObj.transform);
+        }
+
+        void SetupRecordManager(bool runtime)
+        {
+            GameObject rmObj = GameObject.Find("RecordManager");
+            if (rmObj == null)
+            {
+                rmObj = new GameObject("RecordManager");
+            }
+            if (rmObj.GetComponent<RecordManager>() == null)
+                rmObj.AddComponent<RecordManager>();
         }
 
         void SetupMenu(bool runtime)
@@ -635,7 +861,11 @@ namespace VRAimLab
             sm.hitsText = GetText("HitsText");
             sm.shotsText = GetText("ShotsText");
             sm.accuracyText = GetText("AccuracyText");
-            sm.timeText = GetText("TimeText");
+            sm.timerText = GetText("TimerText");
+            sm.comboText = GetText("ComboText");
+            GameObject scoreCanvas = GameObject.Find("ScoreCanvas");
+            if (scoreCanvas != null)
+                sm.resultPanelParent = scoreCanvas.transform;
         }
 
         // ============ Helpers ============
@@ -786,11 +1016,17 @@ namespace VRAimLab
                 "RightHand", "GunVisual", "GunRoot", "GunBody", "GunGrip", "GunBarrel", "AK47",
                 "GunModel_Pistol", "GunModel_AK47", "GunModel_M4",
                 "TargetTemplate", "GridManager", "ScoreManager", "ScoreCanvas", "Panel", "Title",
-                "ScoreText", "HitsText", "ShotsText", "AccuracyText", "TimeText",
+                "ScoreText", "HitsText", "ShotsText", "AccuracyText",
                 "HitEffectPool", "FillLight", "ScreenCrosshair",
                 "CrosshairTop", "CrosshairBottom", "CrosshairLeft", "CrosshairRight",
                 "MenuCanvas", "MenuPanel", "MenuTitle", "ModeLabel", "ModeValue", "GunLabel", "GunValue", "SensLabel", "SensValue", "DiffLabel", "DiffValue",
                 "ModeLeftBtn", "ModeRightBtn", "GunLeftBtn", "GunRightBtn", "SensLeftBtn", "SensRightBtn", "DiffLeftBtn", "DiffRightBtn", "StartBtn", "StopBtn",
+                "ReactionTargetMode",
+                "TrackingTargetMode",
+                "ComboCanvas", "ComboPanel",
+                "TimerCanvas", "TimerText",
+                "ResultCanvas", "ResultPanel",
+                "ScoreChartCanvas", "ScoreChartPanel", "ChartTitle", "ChartStat", "ChartLine", "ChartPoints",
                 "GameStateManager", "MovingTargetMode", "MovingTarget"
             };
             foreach (var n in names)

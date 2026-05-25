@@ -25,6 +25,10 @@ namespace VRAimLab
         public float speedIncreasePerHit = 0.3f;
         public float maxSpeed = 10f;
 
+        [Header("Game Timer")]
+        public float gameDuration = 30f;
+        private Coroutine gameTimerCoroutine;
+
         private GameObject currentTarget;
         private float currentSpeed;
         private Vector3 moveDirection = Vector3.right;
@@ -45,6 +49,8 @@ namespace VRAimLab
             SetMoveDirectionForAxis();
             SpawnTarget();
             StartCoroutine(ChangeDirectionRoutine());
+            ScoreManager.Instance?.ResetScore();
+            gameTimerCoroutine = StartCoroutine(GameTimerRoutine());
         }
 
         public void StopMode()
@@ -55,6 +61,23 @@ namespace VRAimLab
             {
                 Destroy(currentTarget);
                 currentTarget = null;
+            }
+        }
+
+        IEnumerator GameTimerRoutine()
+        {
+            yield return new WaitForSeconds(gameDuration);
+            if (isRunning)
+            {
+                isRunning = false;
+                StopAllCoroutines();
+                if (currentTarget != null)
+                {
+                    Destroy(currentTarget);
+                    currentTarget = null;
+                }
+                ScoreManager.Instance?.RecordAndShowResult();
+                GameStateManager.Instance?.StopGame();
             }
         }
 

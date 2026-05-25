@@ -74,6 +74,13 @@ namespace VRAimLab
             SetupAudioSource();
             device = InputDevices.GetDeviceAtXRNode(controllerNode);
             
+            // 自动检测平台：PICO/VR 设备上自动关闭鼠标调试
+            if (!Application.isEditor && Application.platform == RuntimePlatform.Android)
+            {
+                useMouseDebug = false;
+                Debug.Log("[VRGun] 检测到 Android VR 设备，已自动切换到手柄输入模式");
+            }
+            
             originalLocalPosition = transform.localPosition;
             originalLocalRotation = transform.localRotation;
             
@@ -224,8 +231,6 @@ namespace VRAimLab
                 direction = muzzleTransform.forward;
             }
 
-            ScoreManager.Instance?.AddShot();
-
             PlayShootSound();
             PlayMuzzleFlash();
             PlayMuzzleSmoke();
@@ -233,7 +238,9 @@ namespace VRAimLab
             ApplyRecoil();
 
             RaycastHit hit;
-            if (Physics.Raycast(origin, direction, out hit, maxRayDistance, targetLayer, QueryTriggerInteraction.Collide))
+            bool hitTarget = Physics.Raycast(origin, direction, out hit, maxRayDistance, targetLayer, QueryTriggerInteraction.Collide);
+
+            if (hitTarget)
             {
                 SpawnHitEffect(hit.point, hit.normal);
                 
@@ -262,6 +269,33 @@ namespace VRAimLab
                         }
                     }
                 }
+
+                // 追踪模式目标
+                ReactionTargetEntity reactionTarget = hit.collider.GetComponent<ReactionTargetEntity>();
+                if (reactionTarget != null)
+                    reactionTarget.Hit();
+                else
+                {
+                    reactionTarget = hit.collider.GetComponentInParent<ReactionTargetEntity>();
+                    if (reactionTarget != null)
+                        reactionTarget.Hit();
+                }
+
+                TrackingTargetEntity trackingTarget = hit.collider.GetComponent<TrackingTargetEntity>();
+                if (trackingTarget != null)
+                    trackingTarget.Hit();
+                else
+                {
+                    trackingTarget = hit.collider.GetComponentInParent<TrackingTargetEntity>();
+                    if (trackingTarget != null)
+                        trackingTarget.Hit();
+                }
+
+                ScoreManager.Instance?.AddShot(true);
+            }
+            else
+            {
+                ScoreManager.Instance?.AddShot(false);
             }
         }
 

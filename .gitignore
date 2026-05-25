@@ -52,3 +52,8 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 .vs/
+
+# PICO SDK zip and logs
+PICO Unity Integration SDK-*.zip
+log.txt
+log_new.txt

@@ -26,12 +26,40 @@ namespace VRAimLab
         private Queue<GameObject> targetPool = new Queue<GameObject>();
         private List<int> occupiedIndices = new List<int>();
 
+        [Header("Game Timer")]
+        public float gameDuration = 30f;
+        private float gameStartTime;
+        private bool isRunning = false;
+
         void Start()
         {
             if (gridPositions == null || gridPositions.Count == 0)
                 GenerateGridPositions();
             InitializePool();
             SpawnInitialTargets();
+        }
+
+        public void StartGame()
+        {
+            isRunning = true;
+            gameStartTime = Time.time;
+            ScoreManager.Instance?.ResetScore();
+        }
+
+        public void StopGame()
+        {
+            isRunning = false;
+            ScoreManager.Instance?.RecordAndShowResult();
+            GameStateManager.Instance?.StopGame();
+        }
+
+        void Update()
+        {
+            if (!isRunning) return;
+            if (Time.time - gameStartTime >= gameDuration)
+            {
+                StopGame();
+            }
         }
 
         public void RefreshGrid()

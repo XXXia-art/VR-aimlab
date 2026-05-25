@@ -24,5 +24,8 @@ namespace VRAimLab
             transform.position = basePos;
             transform.rotation = targetCamera.transform.rotation;
         }
-    }
+    }        
 }
+
+
+
