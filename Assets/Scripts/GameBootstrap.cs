@@ -348,7 +348,7 @@ namespace VRAimLab
             if (cam == null)
             {
                 GameObject camObj = new GameObject("Main Camera");
-                camObj.tag = "Main Camera";
+                camObj.tag = "MainCamera";
                 cam = camObj.AddComponent<Camera>();
             }
 
@@ -467,27 +467,67 @@ namespace VRAimLab
 
         void SetupGun(bool runtime)
         {
-            GameObject rightHand = GameObject.Find("RightHand");
-            if (rightHand == null)
-            {
-                rightHand = new GameObject("RightHand");
-                rightHand.transform.position = new Vector3(0.2f, 1.3f, 0.2f);
-            }
+            GameObject gunHost;
+            Transform gunParent;
 
             if (setupXR)
             {
+                // VR 模式：枪挂在 RightHand 下，由手柄追踪
+                GameObject rightHand = GameObject.Find("RightHand");
+                if (rightHand == null)
+                {
+                    rightHand = new GameObject("RightHand");
+                    rightHand.transform.position = new Vector3(0.2f, 1.3f, 0.2f);
+                }
+
                 var tracker = rightHand.GetComponent<XRControllerTracker>();
                 if (tracker == null) tracker = rightHand.AddComponent<XRControllerTracker>();
                 tracker.node = XRNode.RightHand;
+
+                gunHost = rightHand;
+                gunParent = rightHand.transform;
+
+                // 清理 PC 模式残留的 GunFollowCamera
+                var gunFollow = rightHand.GetComponent<GunFollowCamera>();
+                if (gunFollow != null) Destroy(gunFollow);
+            }
+            else
+            {
+                // PC 模式：枪挂在 Camera 下的 GunRig 上，视角转枪自然转
+                Camera mainCam = Camera.main;
+                if (mainCam == null)
+                {
+                    GameObject camObj = GameObject.Find("Main Camera");
+                    if (camObj != null) mainCam = camObj.GetComponent<Camera>();
+                }
+
+                GameObject gunRig = GameObject.Find("GunRig");
+                if (gunRig == null)
+                {
+                    gunRig = new GameObject("GunRig");
+                }
+                if (mainCam != null)
+                {
+                    gunRig.transform.SetParent(mainCam.transform, false);
+                    gunRig.transform.localPosition = new Vector3(0.12f, -0.1f, 0.55f);
+                    gunRig.transform.localRotation = Quaternion.identity;
+                }
+
+                gunHost = gunRig;
+                gunParent = gunRig.transform;
+
+                // 清理 VR 模式残留的 XRControllerTracker
+                var tracker = gunRig.GetComponent<XRControllerTracker>();
+                if (tracker != null) Destroy(tracker);
             }
 
             // GunSelector 负责根据选择创建对应枪械
-            GunSelector gunSelector = rightHand.GetComponent<GunSelector>();
+            GunSelector gunSelector = gunHost.GetComponent<GunSelector>();
             if (gunSelector == null)
             {
-                gunSelector = rightHand.AddComponent<GunSelector>();
-                gunSelector.gunParent = rightHand.transform;
+                gunSelector = gunHost.AddComponent<GunSelector>();
             }
+            gunSelector.gunParent = gunParent;
             gunSelector.pistolModelPrefab = pistolModelPrefab;
             gunSelector.ak47ModelPrefab = ak47ModelPrefab;
             gunSelector.m4ModelPrefab = m4ModelPrefab;
@@ -496,26 +536,13 @@ namespace VRAimLab
             gunSelector.RefreshGun();
 
             // VRGun 脚本
-            VRGun gun = rightHand.GetComponent<VRGun>();
-            if (gun == null) gun = rightHand.AddComponent<VRGun>();
+            VRGun gun = gunHost.GetComponent<VRGun>();
+            if (gun == null) gun = gunHost.AddComponent<VRGun>();
             gun.aimColor = laserAimColor;
             gun.targetLockedColor = laserLockColor;
             gun.controllerNode = XRNode.RightHand;
             gun.useMouseDebug = !setupXR;
             gun.targetLayer = targetLayerMask;
-
-            // GunFollowCamera 只在非 XR 模式使用（鼠标调试）
-            if (!setupXR)
-            {
-                var gunFollow = rightHand.GetComponent<GunFollowCamera>();
-                if (gunFollow == null) gunFollow = rightHand.AddComponent<GunFollowCamera>();
-                gunFollow.targetCamera = Camera.main;
-            }
-            else
-            {
-                var gunFollow = rightHand.GetComponent<GunFollowCamera>();
-                if (gunFollow != null) Destroy(gunFollow);
-            }
 
             if (!setupXR)
             {
