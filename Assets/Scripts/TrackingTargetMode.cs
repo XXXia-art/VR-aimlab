@@ -32,7 +32,7 @@ namespace VRAimLab
         public float gameDuration = 30f;
 
         private GameObject currentTarget;
-        private Slider hpBar;
+        private Image hpBarImage;
         private int maxHP;
         private int currentHP;
         private float moveSpeed;
@@ -145,37 +145,22 @@ namespace VRAimLab
             bgRT.offsetMin = Vector2.zero;
             bgRT.offsetMax = Vector2.zero;
 
-            // 填充区域容器
-            GameObject fillAreaObj = new GameObject("FillArea");
-            fillAreaObj.transform.SetParent(canvasObj.transform, false);
-            RectTransform fillAreaRT = fillAreaObj.GetComponent<RectTransform>();
-            fillAreaRT.anchorMin = Vector2.zero;
-            fillAreaRT.anchorMax = Vector2.one;
-            fillAreaRT.offsetMin = Vector2.zero;
-            fillAreaRT.offsetMax = Vector2.zero;
-
-            // 实际填充图像
+            // 填充图像（使用 Image.fillAmount，避免 Slider 的复杂性）
             GameObject fillObj = new GameObject("Fill");
-            fillObj.transform.SetParent(fillAreaObj.transform, false);
+            fillObj.transform.SetParent(canvasObj.transform, false);
             Image fillImg = fillObj.AddComponent<Image>();
             fillImg.color = Color.cyan;
+            fillImg.type = Image.Type.Filled;
+            fillImg.fillMethod = Image.FillMethod.Horizontal;
+            fillImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+            fillImg.fillAmount = 1f;
             RectTransform fillRT = fillObj.GetComponent<RectTransform>();
             fillRT.anchorMin = Vector2.zero;
             fillRT.anchorMax = Vector2.one;
             fillRT.offsetMin = Vector2.zero;
             fillRT.offsetMax = Vector2.zero;
 
-            // Slider 挂在 canvas 上，fillRect 指向填充图像
-            Slider slider = canvasObj.AddComponent<Slider>();
-            slider.direction = Slider.Direction.LeftToRight;
-            slider.minValue = 0;
-            slider.maxValue = maxHP;
-            slider.value = maxHP;
-            slider.interactable = false;
-            slider.fillRect = fillRT;
-            slider.targetGraphic = fillImg;
-
-            hpBar = slider;
+            hpBarImage = fillImg;
         }
 
         void UpdateMaterialColor(Material mat)
@@ -191,8 +176,8 @@ namespace VRAimLab
 
         void UpdateHPBar()
         {
-            if (hpBar != null)
-                hpBar.value = currentHP;
+            if (hpBarImage != null)
+                hpBarImage.fillAmount = currentHP / (float)maxHP;
 
             if (currentTarget != null)
             {

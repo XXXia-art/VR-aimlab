@@ -232,57 +232,49 @@ namespace VRAimLab
             ApplyRecoil();
 
             RaycastHit hit;
-            bool hitTarget = Physics.Raycast(origin, direction, out hit, maxRayDistance, targetLayer, QueryTriggerInteraction.Collide);
+            // fallback：如果 targetLayer 未设置（0 = Nothing），检测所有 layer
+            LayerMask mask = targetLayer == 0 ? ~0 : targetLayer;
+            bool hitTarget = Physics.Raycast(origin, direction, out hit, maxRayDistance, mask, QueryTriggerInteraction.Collide);
 
             if (hitTarget)
             {
                 SpawnHitEffect(hit.point, hit.normal);
-                
+
                 Target target = hit.collider.GetComponent<Target>();
-                if (target != null)
-                {
-                    target.Hit();
-                }
+                if (target != null) target.Hit();
                 else
                 {
                     target = hit.collider.GetComponentInParent<Target>();
-                    if (target != null)
-                    {
-                        target.Hit();
-                    }
+                    if (target != null) target.Hit();
                     else
                     {
                         MovingTargetEntity movingTarget = hit.collider.GetComponent<MovingTargetEntity>();
-                        if (movingTarget != null)
-                            movingTarget.Hit();
+                        if (movingTarget != null) movingTarget.Hit();
                         else
                         {
                             movingTarget = hit.collider.GetComponentInParent<MovingTargetEntity>();
-                            if (movingTarget != null)
-                                movingTarget.Hit();
+                            if (movingTarget != null) movingTarget.Hit();
                         }
                     }
                 }
 
-                // 追踪模式目标
                 ReactionTargetEntity reactionTarget = hit.collider.GetComponent<ReactionTargetEntity>();
-                if (reactionTarget != null)
-                    reactionTarget.Hit();
+                if (reactionTarget != null) reactionTarget.Hit();
                 else
                 {
                     reactionTarget = hit.collider.GetComponentInParent<ReactionTargetEntity>();
-                    if (reactionTarget != null)
-                        reactionTarget.Hit();
+                    if (reactionTarget != null) reactionTarget.Hit();
                 }
 
                 TrackingTargetEntity trackingTarget = hit.collider.GetComponent<TrackingTargetEntity>();
                 if (trackingTarget != null)
+                {
                     trackingTarget.Hit();
+                }
                 else
                 {
                     trackingTarget = hit.collider.GetComponentInParent<TrackingTargetEntity>();
-                    if (trackingTarget != null)
-                        trackingTarget.Hit();
+                    if (trackingTarget != null) trackingTarget.Hit();
                 }
 
                 ScoreManager.Instance?.AddShot(true);

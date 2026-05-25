@@ -272,40 +272,15 @@ namespace VRAimLab
             Renderer[] renderers = model.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length == 0) return;
 
+            Material defaultMat = new Material(Shader.Find("Standard"));
+            defaultMat.SetColor("_Color", new Color(0.08f, 0.08f, 0.08f));
+            defaultMat.SetFloat("_Metallic", 0.5f);
+            defaultMat.SetFloat("_Glossiness", 0.3f);
+
             foreach (var r in renderers)
             {
                 if (r is SpriteRenderer || r is ParticleSystemRenderer) continue;
-
-                Material mat = r.sharedMaterial;
-                bool needsMaterial = mat == null || mat.shader == null ||
-                    string.IsNullOrEmpty(mat.shader.name) ||
-                    mat.shader.name == "Hidden/InternalErrorShader";
-
-                if (!needsMaterial)
-                    continue; // 材质有效，保留原纹理
-
-                // 材质丢失：先尝试从 Resources 加载同名材质
-                Material loadedMat = null;
-                if (mat != null && !string.IsNullOrEmpty(mat.name))
-                {
-                    loadedMat = Resources.Load<Material>($"Models/{mat.name}");
-                    if (loadedMat == null)
-                        loadedMat = Resources.Load<Material>($"Models/Materials/{mat.name}");
-                }
-
-                if (loadedMat != null)
-                {
-                    r.material = loadedMat;
-                    Debug.Log($"[GunSelector] 从 Resources 加载材质: {mat.name}");
-                }
-                else
-                {
-                    Material defaultMat = new Material(Shader.Find("Standard"));
-                    defaultMat.SetColor("_Color", new Color(0.12f, 0.12f, 0.14f));
-                    defaultMat.SetFloat("_Metallic", 0.7f);
-                    defaultMat.SetFloat("_Glossiness", 0.5f);
-                    r.material = defaultMat;
-                }
+                r.material = defaultMat;
             }
         }
 
