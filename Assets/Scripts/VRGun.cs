@@ -154,21 +154,26 @@ namespace VRAimLab
             HandleShooting();
         }
 
+        Vector3 GetShootOrigin()
+        {
+            if (useMouseDebug && mainCam != null)
+                return mainCam.transform.position;
+            return muzzleTransform != null ? muzzleTransform.position : transform.position;
+        }
+
+        Vector3 GetShootDirection()
+        {
+            if (useMouseDebug && mainCam != null)
+                return mainCam.transform.forward;
+
+            // 统一使用手柄 forward 作为射击方向，避免模型枪口轴向不一致
+            return transform.forward;
+        }
+
         void UpdateLaser()
         {
-            Vector3 origin;
-            Vector3 direction;
-
-            if (useMouseDebug && mainCam != null)
-            {
-                origin = mainCam.transform.position;
-                direction = mainCam.transform.forward;
-            }
-            else
-            {
-                origin = muzzleTransform.position;
-                direction = muzzleTransform.forward;
-            }
+            Vector3 origin = GetShootOrigin();
+            Vector3 direction = GetShootDirection();
 
             RaycastHit hit;
             bool hitTarget = Physics.Raycast(origin, direction, out hit, maxRayDistance, targetLayer, QueryTriggerInteraction.Collide);
@@ -217,19 +222,8 @@ namespace VRAimLab
 
         void Shoot()
         {
-            Vector3 origin;
-            Vector3 direction;
-
-            if (useMouseDebug && mainCam != null)
-            {
-                origin = mainCam.transform.position;
-                direction = mainCam.transform.forward;
-            }
-            else
-            {
-                origin = muzzleTransform.position;
-                direction = muzzleTransform.forward;
-            }
+            Vector3 origin = GetShootOrigin();
+            Vector3 direction = GetShootDirection();
 
             PlayShootSound();
             PlayMuzzleFlash();
@@ -309,8 +303,18 @@ namespace VRAimLab
         {
             isRecoiling = true;
 
-            Vector3 targetRecoilPos = new Vector3(0, 0, -recoilForce);
+            // 在枪模型上执行后坐力，避免和 XRControllerTracker 冲突
+            GunSelector selector = GetComponent<GunSelector>();
+            Transform gunModel = (selector != null && selector.currentGun != null)
+                ? selector.currentGun.transform
+                : transform;
+
+            // 局部空间后坐力：-Z 是枪管后方（不受世界旋转影响）
+            Vector3 recoilOffset = new Vector3(0, 0, -recoilForce);
             Vector3 targetRecoilRot = new Vector3(-recoilRotation, 0, 0);
+
+            Vector3 startPos = gunModel.localPosition;
+            Quaternion startRot = gunModel.localRotation;
 
             float elapsed = 0f;
             while (elapsed < recoilDuration)
@@ -318,8 +322,8 @@ namespace VRAimLab
                 elapsed += Time.deltaTime;
                 float t = Mathf.SmoothStep(0, 1, elapsed / recoilDuration);
 
-                transform.localPosition = Vector3.Lerp(originalLocalPosition, originalLocalPosition - transform.forward * recoilForce, t);
-                transform.localRotation = originalLocalRotation * Quaternion.Euler(Vector3.Lerp(Vector3.zero, targetRecoilRot, t));
+                gunModel.localPosition = Vector3.Lerp(startPos, startPos + recoilOffset, t);
+                gunModel.localRotation = startRot * Quaternion.Euler(Vector3.Lerp(Vector3.zero, targetRecoilRot, t));
                 yield return null;
             }
 
@@ -329,13 +333,13 @@ namespace VRAimLab
                 elapsed += Time.deltaTime;
                 float t = Mathf.SmoothStep(0, 1, elapsed / recoilRecoveryDuration);
 
-                transform.localPosition = Vector3.Lerp(originalLocalPosition - transform.forward * recoilForce, originalLocalPosition, t);
-                transform.localRotation = originalLocalRotation * Quaternion.Euler(Vector3.Lerp(targetRecoilRot, Vector3.zero, t));
+                gunModel.localPosition = Vector3.Lerp(startPos + recoilOffset, startPos, t);
+                gunModel.localRotation = startRot * Quaternion.Euler(Vector3.Lerp(targetRecoilRot, Vector3.zero, t));
                 yield return null;
             }
 
-            transform.localPosition = originalLocalPosition;
-            transform.localRotation = originalLocalRotation;
+            gunModel.localPosition = startPos;
+            gunModel.localRotation = startRot;
             isRecoiling = false;
         }
 

@@ -11,6 +11,10 @@ namespace VRAimLab
 
         void LateUpdate()
         {
+            // VR 设备上让 XRControllerTracker 控制枪械位置，不跟随相机
+            if (!Application.isEditor && Application.platform == RuntimePlatform.Android)
+                return;
+
             if (targetCamera == null) return;
 
             Vector3 basePos = targetCamera.transform.position + targetCamera.transform.rotation * offsetPosition;

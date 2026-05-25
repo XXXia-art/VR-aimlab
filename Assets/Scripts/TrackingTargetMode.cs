@@ -134,6 +134,7 @@ namespace VRAimLab
             canvasRT.sizeDelta = new Vector2(1.2f, 0.15f);
             canvasRT.localScale = Vector3.one * 0.4f;
 
+            // 背景
             GameObject bgObj = new GameObject("HPBarBg");
             bgObj.transform.SetParent(canvasObj.transform, false);
             Image bgImg = bgObj.AddComponent<Image>();
@@ -144,8 +145,18 @@ namespace VRAimLab
             bgRT.offsetMin = Vector2.zero;
             bgRT.offsetMax = Vector2.zero;
 
-            GameObject fillObj = new GameObject("HPBarFill");
-            fillObj.transform.SetParent(canvasObj.transform, false);
+            // 填充区域容器
+            GameObject fillAreaObj = new GameObject("FillArea");
+            fillAreaObj.transform.SetParent(canvasObj.transform, false);
+            RectTransform fillAreaRT = fillAreaObj.GetComponent<RectTransform>();
+            fillAreaRT.anchorMin = Vector2.zero;
+            fillAreaRT.anchorMax = Vector2.one;
+            fillAreaRT.offsetMin = Vector2.zero;
+            fillAreaRT.offsetMax = Vector2.zero;
+
+            // 实际填充图像
+            GameObject fillObj = new GameObject("Fill");
+            fillObj.transform.SetParent(fillAreaObj.transform, false);
             Image fillImg = fillObj.AddComponent<Image>();
             fillImg.color = Color.cyan;
             RectTransform fillRT = fillObj.GetComponent<RectTransform>();
@@ -154,13 +165,17 @@ namespace VRAimLab
             fillRT.offsetMin = Vector2.zero;
             fillRT.offsetMax = Vector2.zero;
 
-            hpBar = fillObj.AddComponent<Slider>();
-            hpBar.direction = Slider.Direction.LeftToRight;
-            hpBar.minValue = 0;
-            hpBar.maxValue = maxHP;
-            hpBar.value = maxHP;
-            hpBar.interactable = false;
-            hpBar.fillRect = fillRT;
+            // Slider 挂在 canvas 上，fillRect 指向填充图像
+            Slider slider = canvasObj.AddComponent<Slider>();
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.minValue = 0;
+            slider.maxValue = maxHP;
+            slider.value = maxHP;
+            slider.interactable = false;
+            slider.fillRect = fillRT;
+            slider.targetGraphic = fillImg;
+
+            hpBar = slider;
         }
 
         void UpdateMaterialColor(Material mat)

@@ -33,6 +33,14 @@ namespace VRAimLab
                 m4ModelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/3D Low Poly Weapon/3D Assets/M 16 .fbx");
 #endif
 
+            // 运行时备用：从 Resources 加载
+            if (pistolModelPrefab == null)
+                pistolModelPrefab = Resources.Load<GameObject>("Models/Pistol");
+            if (ak47ModelPrefab == null)
+                ak47ModelPrefab = Resources.Load<GameObject>("Models/AK47");
+            if (m4ModelPrefab == null)
+                m4ModelPrefab = Resources.Load<GameObject>("Models/M4");
+
             if (GameStateManager.Instance != null)
             {
                 GameStateManager.Instance.OnGunChanged += OnGunChanged;
@@ -199,6 +207,9 @@ namespace VRAimLab
 #if UNITY_EDITOR
             // 尝试加载同目录下的同名材质并应用
             TryApplyMaterial(model, prefab);
+#else
+            // Build 后材质可能丢失，应用默认材质防止变白
+            ApplyDefaultMaterial(model);
 #endif
 
             // 查找枪口位置（按常见命名）
@@ -255,6 +266,48 @@ namespace VRAimLab
             Debug.Log($"[GunSelector] 已应用材质: {matPath}");
         }
 #endif
+
+        void ApplyDefaultMaterial(GameObject model)
+        {
+            Renderer[] renderers = model.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return;
+
+            foreach (var r in renderers)
+            {
+                if (r is SpriteRenderer || r is ParticleSystemRenderer) continue;
+
+                Material mat = r.sharedMaterial;
+                bool needsMaterial = mat == null || mat.shader == null ||
+                    string.IsNullOrEmpty(mat.shader.name) ||
+                    mat.shader.name == "Hidden/InternalErrorShader";
+
+                if (!needsMaterial)
+                    continue; // 材质有效，保留原纹理
+
+                // 材质丢失：先尝试从 Resources 加载同名材质
+                Material loadedMat = null;
+                if (mat != null && !string.IsNullOrEmpty(mat.name))
+                {
+                    loadedMat = Resources.Load<Material>($"Models/{mat.name}");
+                    if (loadedMat == null)
+                        loadedMat = Resources.Load<Material>($"Models/Materials/{mat.name}");
+                }
+
+                if (loadedMat != null)
+                {
+                    r.material = loadedMat;
+                    Debug.Log($"[GunSelector] 从 Resources 加载材质: {mat.name}");
+                }
+                else
+                {
+                    Material defaultMat = new Material(Shader.Find("Standard"));
+                    defaultMat.SetColor("_Color", new Color(0.12f, 0.12f, 0.14f));
+                    defaultMat.SetFloat("_Metallic", 0.7f);
+                    defaultMat.SetFloat("_Glossiness", 0.5f);
+                    r.material = defaultMat;
+                }
+            }
+        }
 
         Transform FindMuzzle(Transform parent)
         {

@@ -269,10 +269,20 @@ namespace VRAimLab
             if (gridObj != null) Destroy(gridObj);
 
             GameObject reactionObj = GameObject.Find("ReactionTargetMode");
-            if (reactionObj != null) Destroy(reactionObj);
+            if (reactionObj != null)
+            {
+                var rmode = reactionObj.GetComponent<ReactionTargetMode>();
+                rmode?.StopMode();
+                Destroy(reactionObj);
+            }
 
             GameObject trackingObj = GameObject.Find("TrackingTargetMode");
-            if (trackingObj != null) Destroy(trackingObj);
+            if (trackingObj != null)
+            {
+                var tmode = trackingObj.GetComponent<TrackingTargetMode>();
+                tmode?.StopMode();
+                Destroy(trackingObj);
+            }
 
             GameObject targetTemplate = GameObject.Find("TargetTemplate");
             if (targetTemplate != null)
@@ -491,22 +501,48 @@ namespace VRAimLab
             gun.aimColor = laserAimColor;
             gun.targetLockedColor = laserLockColor;
             gun.controllerNode = XRNode.RightHand;
-            gun.useMouseDebug = true;
+            gun.useMouseDebug = !setupXR;
             gun.targetLayer = targetLayerMask;
 
-            // GunFollowCamera for FPS style
-            var gunFollow = rightHand.GetComponent<GunFollowCamera>();
-            if (gunFollow == null) gunFollow = rightHand.AddComponent<GunFollowCamera>();
-            gunFollow.targetCamera = Camera.main;
-
-            // Screen crosshair
-            GameObject crosshairObj = GameObject.Find("ScreenCrosshair");
-            if (crosshairObj == null)
+            // GunFollowCamera 只在非 XR 模式使用（鼠标调试）
+            if (!setupXR)
             {
-                crosshairObj = new GameObject("ScreenCrosshair");
+                var gunFollow = rightHand.GetComponent<GunFollowCamera>();
+                if (gunFollow == null) gunFollow = rightHand.AddComponent<GunFollowCamera>();
+                gunFollow.targetCamera = Camera.main;
             }
-            var crosshair = crosshairObj.GetComponent<ScreenCrosshair>();
-            if (crosshair == null) crosshairObj.AddComponent<ScreenCrosshair>();
+            else
+            {
+                var gunFollow = rightHand.GetComponent<GunFollowCamera>();
+                if (gunFollow != null) Destroy(gunFollow);
+            }
+
+            if (!setupXR)
+            {
+                // 鼠标模式：屏幕准星
+                GameObject crosshairObj = GameObject.Find("ScreenCrosshair");
+                if (crosshairObj == null)
+                {
+                    crosshairObj = new GameObject("ScreenCrosshair");
+                }
+                var crosshair = crosshairObj.GetComponent<ScreenCrosshair>();
+                if (crosshair == null) crosshairObj.AddComponent<ScreenCrosshair>();
+            }
+            else
+            {
+                // VR 模式：世界空间准星（跟随枪口）
+                GameObject wsCrosshairObj = GameObject.Find("WorldSpaceCrosshair");
+                if (wsCrosshairObj == null)
+                {
+                    wsCrosshairObj = new GameObject("WorldSpaceCrosshair");
+                }
+                var wsCrosshair = wsCrosshairObj.GetComponent<WorldSpaceCrosshair>();
+                if (wsCrosshair == null)
+                {
+                    wsCrosshair = wsCrosshairObj.AddComponent<WorldSpaceCrosshair>();
+                    wsCrosshair.targetLayer = targetLayerMask;
+                }
+            }
         }
 
         void SetupScoreUI(bool runtime)

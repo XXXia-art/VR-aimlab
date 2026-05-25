@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR;
 using System.Collections.Generic;
 
 namespace VRAimLab
@@ -21,10 +22,39 @@ namespace VRAimLab
         Canvas menuCanvas;
         Button hoveredButton;
         Dictionary<Button, Color> defaultColors = new Dictionary<Button, Color>();
+        private bool wasTriggerPressed = false;
 
         void Start()
         {
             mainCam = Camera.main;
+        }
+
+        Transform GetRayOrigin()
+        {
+            if (!Application.isEditor && Application.platform == RuntimePlatform.Android)
+            {
+                GameObject rightHand = GameObject.Find("RightHand");
+                if (rightHand != null) return rightHand.transform;
+            }
+            return mainCam != null ? mainCam.transform : null;
+        }
+
+        bool GetTriggerDown()
+        {
+            if (!Application.isEditor && Application.platform == RuntimePlatform.Android)
+            {
+                var device = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+                if (device.isValid)
+                {
+                    device.TryGetFeatureValue(CommonUsages.triggerButton, out bool pressed);
+                    bool justPressed = pressed && !wasTriggerPressed;
+                    wasTriggerPressed = pressed;
+                    return justPressed;
+                }
+                wasTriggerPressed = false;
+                return false;
+            }
+            return Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.E);
         }
 
         void Update()
@@ -38,8 +68,11 @@ namespace VRAimLab
                 if (menuObj != null) menuCanvas = menuObj.GetComponent<Canvas>();
             }
 
-            // 从屏幕中心发射射线
-            Ray ray = new Ray(mainCam.transform.position, mainCam.transform.forward);
+            // 确定射线来源（VR 下用手柄，非 VR 用相机）
+            Transform rayOrigin = GetRayOrigin();
+            if (rayOrigin == null) return;
+
+            Ray ray = new Ray(rayOrigin.position, rayOrigin.forward);
             Button hitButton = null;
 
             if (menuCanvas != null && menuCanvas.renderMode == RenderMode.WorldSpace)
@@ -69,8 +102,8 @@ namespace VRAimLab
 
             UpdateHover(hitButton);
 
-            // 触发点击：鼠标左键或 E 键
-            if ((Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.E)) && hoveredButton != null)
+            // 触发点击
+            if (GetTriggerDown() && hoveredButton != null)
             {
                 hoveredButton.onClick.Invoke();
             }
@@ -142,6 +175,10 @@ namespace VRAimLab
         void OnGUI()
         {
             if (!showCenterDot) return;
+
+            // VR 模式下不绘制屏幕中心点
+            if (!Application.isEditor && Application.platform == RuntimePlatform.Android)
+                return;
 
             // 屏幕中心小点
             float size = hoveredButton != null ? 10f : 6f;
