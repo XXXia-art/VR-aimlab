@@ -54,7 +54,11 @@ namespace VRAimLab
                 wasTriggerPressed = false;
                 return false;
             }
+#if ENABLE_LEGACY_INPUT_MANAGER
             return Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.E);
+#else
+            return false;
+#endif
         }
 
         void Update()

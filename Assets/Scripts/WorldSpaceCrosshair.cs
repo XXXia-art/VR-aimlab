@@ -40,7 +40,6 @@ namespace VRAimLab
             dotRect.sizeDelta = new Vector2(24, 24);
 
             crosshairImage = dotObj.AddComponent<Image>();
-            crosshairImage.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob");
             crosshairImage.color = aimColor;
             crosshairImage.enabled = false; // 关闭视觉准星，仅保留射线
         }

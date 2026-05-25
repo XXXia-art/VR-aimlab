@@ -20,6 +20,11 @@ namespace VRAimLab
 
         void Update()
         {
+            // VR 设备上跳过鼠标瞄准
+            if (!Application.isEditor && Application.platform == RuntimePlatform.Android)
+                return;
+
+#if ENABLE_LEGACY_INPUT_MANAGER
             // Only process mouse look when cursor is locked or not in editor
             if (Application.isEditor)
             {
@@ -46,6 +51,7 @@ namespace VRAimLab
                 pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
                 transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
             }
+#endif
         }
 
         void LockCursor()
